@@ -1,0 +1,12 @@
+{
+  "name": "whparser",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.3",
+    "moment": "^2.26.0",
+    "node-fetch": "^2.6.0",
+    "sleep": "^6.2.0"
+  }
+}
