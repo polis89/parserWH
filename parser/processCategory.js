@@ -17,7 +17,7 @@ const whURL = 'https://www.willhaben.at/'
 const resultListId = 'resultlist'
 
 const updateGapMin = 600
-let singleUpdateCutoff = 100
+let singleUpdateCutoff = 200
 
 const processCategory = async category => {
   console.log(`=== Start processing category: ${category.id}`)
