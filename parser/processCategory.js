@@ -211,13 +211,17 @@ const updateCategory = async category => {
     const db = client.db(dbName)
     const col = db.collection('ads')
 
+    const cutoffDate = moment().add(-updateGapMin, 'minutes')
+    console.log('cutoffDate', cutoffDate)
+
     const cursor = col.find({
       catId: category.id,
       status: STATUS_CODES.OPEN
     })
 
-    const cutoffDate = moment().add(-updateGapMin, 'minutes')
-    console.log('cutoffDate', cutoffDate)
+    const count = await cursor.count()
+
+    console.log('resultSet size: ' + count)
 
     let ad
     while ((ad = await cursor.next())) {
