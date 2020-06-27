@@ -13,7 +13,11 @@ adController.search = async (req, res) => {
     const db = client.db(dbName)
     const col = db.collection('ads')
 
-    const result = await col.find(req.body).toArray()
+    let result = await col.find(req.body).toArray()
+    result = result.map(r => {
+      const { thumbnail, ...rest } = r
+      return rest
+    })
     res.status(200).json({
       result
     })

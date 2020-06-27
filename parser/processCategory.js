@@ -3,6 +3,7 @@ const _ = require('lodash')
 const MongoClient = require('mongodb').MongoClient
 const cheerio = require('cheerio')
 const moment = require('moment')
+const sleep = require('sleep')
 
 const STATUS_CODES = require('./utils').STATUS_CODES
 const RESULT_CODES = require('./utils').RESULT_CODES
@@ -17,7 +18,8 @@ const whURL = 'https://www.willhaben.at/'
 const resultListId = 'resultlist'
 
 const updateGapMin = 600
-let singleUpdateCutoff = 200
+let singleUpdateCutoff = 100
+const updateTimeoutMin = 10
 
 const processCategory = async category => {
   console.log(`=== Start processing category: ${category.id}`)
@@ -28,13 +30,26 @@ const processCategory = async category => {
   const stats = {
     [RESULT_CODES.CREATED]: 0,
     [RESULT_CODES.UPDATED]: 0,
-    [RESULT_CODES.SOLD]: 0
+    [RESULT_CODES.SOLD]: 0,
+    [RESULT_CODES.TIMEDOUT]: 0
   }
 
-  // Update existing ads
-  const updateStats = await updateCategory(category)
-  stats[RESULT_CODES.UPDATED] += updateStats[RESULT_CODES.UPDATED]
-  stats[RESULT_CODES.SOLD] += updateStats[RESULT_CODES.SOLD]
+  while (true) {
+    // Update existing ads
+    const updateStats = await updateCategory(category)
+    stats[RESULT_CODES.UPDATED] += updateStats[RESULT_CODES.UPDATED]
+    stats[RESULT_CODES.SOLD] += updateStats[RESULT_CODES.SOLD]
+    stats[RESULT_CODES.TIMEDOUT] += updateStats[RESULT_CODES.TIMEDOUT]
+    if (
+      updateStats[RESULT_CODES.UPDATED] === 0 &&
+      updateStats[RESULT_CODES.SOLD] === 0 &&
+      updateStats[RESULT_CODES.UNMODIFIED] === 0 &&
+      updateStats[RESULT_CODES.TIMEDOUT] === 0
+    ) {
+      break
+    }
+    sleep.msleep(updateTimeoutMin * 1000 * 60)
+  }
 
   // Add new ads
   let currentPage = 1
@@ -137,13 +152,17 @@ const processResult = resultElement => {
   return item
 }
 
-const processSingleResult = page => {
+const processSingleResult = (page, ad) => {
   const item = {}
   const statusMsgBox = cheerio('#statusMessageBox .text', page)
     .text()
     .trim()
   if (statusMsgBox.includes('Diese Anzeige ist nicht mehr')) {
-    item.price = STATUS_CODES.SOLD
+    const createdMoment = moment(ad.createdDate)
+    const timeoutCutoff = moment().add(-45, 'days')
+    item.price = createdMoment.isBefore(timeoutCutoff)
+      ? STATUS_CODES.TIMEDOUT
+      : STATUS_CODES.SOLD
     return item
   }
 
@@ -203,6 +222,7 @@ const updateCategory = async category => {
   const stats = {
     [RESULT_CODES.UNMODIFIED]: 0,
     [RESULT_CODES.UPDATED]: 0,
+    [RESULT_CODES.TIMEDOUT]: 0,
     [RESULT_CODES.SOLD]: 0
   }
   try {
@@ -246,7 +266,7 @@ const updateCategory = async category => {
 const updateAd = async (ad, db) => {
   const url = new URL(ad.id, whURL)
   const page = await fetchPageSyncDelay(url)
-  const parsedAd = processSingleResult(page)
+  const parsedAd = processSingleResult(page, ad)
   let status = RESULT_CODES.UNMODIFIED
   const col = db.collection('ads')
   if (parsedAd.fullDesc && !ad.fullDesc) {
@@ -261,18 +281,21 @@ const updateAd = async (ad, db) => {
     )
     console.log(`Set new desc. Ad: ${ad.id}`)
   }
-  if (parsedAd.price === STATUS_CODES.SOLD) {
+  if (
+    parsedAd.price === STATUS_CODES.SOLD ||
+    parsedAd.price === STATUS_CODES.TIMEDOUT
+  ) {
     await col.updateOne(
       { id: ad.id },
       {
         $set: {
-          status: STATUS_CODES.SOLD,
+          status: parsedAd.price,
           lastUpdate: moment().toDate()
         }
       }
     )
-    console.log(`---> Sold. Ad: ${ad.id}, price: ${ad.price}`)
-    return RESULT_CODES.SOLD
+    console.log(`---> ${parsedAd.price}. Ad: ${ad.id}, price: ${ad.price}`)
+    return parsedAd.price
   }
   if (parsedAd.price !== ad.price) {
     const priceHistory = ad.priceHistory
@@ -303,8 +326,6 @@ const updateAd = async (ad, db) => {
       }
     }
   )
-  console.log(`Set update date: ${ad.id}`)
-
   return status
 }
 
