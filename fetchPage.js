@@ -18,7 +18,7 @@ const fetchPageSync = async url => {
 
 const fetchPageSyncDelay = async (url, pageNum) => {
   sleep.msleep(Math.floor(Math.random() * maxWait + minWait))
-  const res = await fetchPageSync(`${url}?page=${pageNum || 1}`)
+  const res = await fetchPageSync(pageNum ? `${url}?page=${pageNum}` : url)
   return res
 }
 

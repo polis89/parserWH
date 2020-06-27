@@ -8,7 +8,8 @@ const STATUS_CODES = {
 const RESULT_CODES = {
   CREATED: 'CREATED',
   UPDATED: 'UPDATED',
-  UNMODIFIED: 'UNMODIFIED'
+  UNMODIFIED: 'UNMODIFIED',
+  SOLD: 'SOLD'
 }
 
 const dburl = 'mongodb://localhost:27017'

@@ -53,9 +53,10 @@ const processParsedItem = async (parsedItem, db) => {
         }
       ],
       createdDate: parsedItem.createdDate.toDate(),
+      lastUpdate: moment().toDate(),
       status: STATUS_CODES.OPEN
     })
-    console.log(`Added new ad: ${parsedItem.id}`)
+    console.log(`Added new ad: ${parsedItem.id}, price: ${parsedItem.price}`)
     return RESULT_CODES.CREATED
   }
   return RESULT_CODES.UNMODIFIED
