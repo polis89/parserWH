@@ -19,7 +19,7 @@ const resultListId = 'resultlist'
 
 const updateGapMin = 600
 let singleUpdateCutoff = 100
-const updateTimeoutMin = 10
+const updateTimeoutMin = process.env.http_proxy ? 0 : 1
 
 const processCategory = async category => {
   console.log(`=== Start processing category: ${category.id}`)
@@ -32,6 +32,20 @@ const processCategory = async category => {
     [RESULT_CODES.UPDATED]: 0,
     [RESULT_CODES.SOLD]: 0,
     [RESULT_CODES.TIMEDOUT]: 0
+  }
+
+  // Add new ads
+  let currentPage = 1
+
+  while (true) {
+    const page = await fetchPageSyncDelay(url, currentPage++)
+    const { needNextPage, created } = await processPage(
+      page,
+      currentPage,
+      category
+    )
+    stats[RESULT_CODES.CREATED] += created
+    if (!needNextPage) break
   }
 
   while (true) {
@@ -49,20 +63,6 @@ const processCategory = async category => {
       break
     }
     sleep.msleep(updateTimeoutMin * 1000 * 60)
-  }
-
-  // Add new ads
-  let currentPage = 1
-
-  while (true) {
-    const page = await fetchPageSyncDelay(url, currentPage++)
-    const { needNextPage, created } = await processPage(
-      page,
-      currentPage,
-      category
-    )
-    stats[RESULT_CODES.CREATED] += created
-    if (!needNextPage) break
   }
   console.log(`Category ${category.id} parsed`, stats)
 
@@ -177,7 +177,7 @@ const processSingleResult = (page, ad) => {
 
   const base64str = /replaceWith\(.+\,.+\(\'(.+)\'\)\)/.exec(priceScript)
   if (!base64str || !base64str[1]) {
-    console.error('Cannot parse the price: ', priceScript.trim())
+    console.error('Cannot parse the price: ', priceScript)
     console.log('statusMsgBox', statusMsgBox)
     return
   }
@@ -243,16 +243,18 @@ const updateCategory = async category => {
 
     console.log('resultSet size: ' + count)
 
+    let counter = singleUpdateCutoff
+
     let ad
     while ((ad = await cursor.next())) {
-      if (!singleUpdateCutoff) break
+      if (!counter) break
 
       if (ad.lastUpdate && cutoffDate.isBefore(moment(ad.lastUpdate))) {
         continue
       }
       const resCode = await updateAd(ad, db)
       stats[resCode] += 1
-      singleUpdateCutoff--
+      counter--
     }
   } catch (err) {
     console.log(err.stack)
@@ -269,6 +271,10 @@ const updateAd = async (ad, db) => {
   const parsedAd = processSingleResult(page, ad)
   let status = RESULT_CODES.UNMODIFIED
   const col = db.collection('ads')
+  if (!parsedAd) {
+    console.log('cannot parse ad')
+    return RESULT_CODES.UNMODIFIED
+  }
   if (parsedAd.fullDesc && !ad.fullDesc) {
     await col.updateOne(
       { id: ad.id },
@@ -295,6 +301,9 @@ const updateAd = async (ad, db) => {
       }
     )
     console.log(`---> ${parsedAd.price}. Ad: ${ad.id}, price: ${ad.price}`)
+    if (parsedAd.price !== 'TIMEDOUT') {
+      console.log(`---> Desc: ${ad.fullDesc ? ad.fullDesc : ad.desc}`)
+    }
     return parsedAd.price
   }
   if (parsedAd.price !== ad.price) {

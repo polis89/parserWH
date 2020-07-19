@@ -40,12 +40,12 @@ const processParsedItem = async (parsedItem, db) => {
     id: parsedItem.id
   })
   if (!existingAd) {
-    let img
+    // let img
 
-    img = await fetchImgSyncDelay(parsedItem.thumbnailLink)
+    // img = await fetchImgSyncDelay(parsedItem.thumbnailLink)
     await col.insertOne({
       ...parsedItem,
-      thumbnail: Binary(String.fromCharCode.apply(null, new Uint8Array(img))),
+      // thumbnail: Binary(String.fromCharCode.apply(null, new Uint8Array(img))),
       priceHistory: [
         {
           price: parsedItem.price,
@@ -56,7 +56,7 @@ const processParsedItem = async (parsedItem, db) => {
       lastUpdate: moment().toDate(),
       status: STATUS_CODES.OPEN
     })
-    console.log(`Added new ad: ${parsedItem.id}, price: ${parsedItem.price}`)
+    console.log(`Added new ad: ${parsedItem.link}, price: ${parsedItem.price}`)
     return RESULT_CODES.CREATED
   }
   return RESULT_CODES.UNMODIFIED
